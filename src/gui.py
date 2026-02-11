@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import font_manager, rc
 import platform
+import sys
 
 # 로직 모듈
 from src.data_loader import DataLoader
@@ -39,15 +40,10 @@ class LottoApp(ctk.CTk):
         
         self.loader = DataLoader()
         self.ai = LottoAI()
+        self.protocol("WM_DELETE_WINDOW", self.quit_program)
         self._init_ui()
 
-    # ... (기존 _init_ui, log, load_file, start_thread, run_ai 코드는 동일하므로 생략) ...
-    # ... (위의 코드들 복사해서 그대로 쓰시면 됩니다) ...
-
     def _init_ui(self):
-        # (이전 답변의 _init_ui 코드와 동일하게 작성해주세요)
-        # 편의를 위해 버튼 연결 부분만 적어드립니다.
-        # ...
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
@@ -61,6 +57,14 @@ class LottoApp(ctk.CTk):
         self.btn_file.pack(padx=20, pady=(0,5), fill="x")
         self.lbl_status = ctk.CTkLabel(self.header_frame, text="파일 없음", text_color="gray")
         self.lbl_status.pack(pady=(0,10))
+
+        self.btn_exit = ctk.CTkButton(self.header_frame, text="❌ 프로그램 종료", 
+                                      command=self.quit_program,
+                                      fg_color="#C62828", hover_color="#B71C1C")
+        self.btn_exit.pack(padx=20, pady=(0,10), fill="x")
+
+        self.lbl_status = ctk.CTkLabel(self.header_frame, text="파일 없음", text_color="gray")
+        self.lbl_status.pack(pady=(0,5))
 
         # === 2. 설정 영역 ===
         self.setting_frame = ctk.CTkFrame(self)
@@ -236,3 +240,9 @@ class LottoApp(ctk.CTk):
         canvas.draw()
         widget = canvas.get_tk_widget()
         widget.pack(fill="both", expand=True, pady=5)
+
+    def quit_program(self):
+            print("프로그램을 종료합니다...")
+            self.destroy() # GUI 창 닫기
+            
+            os._exit(0)
