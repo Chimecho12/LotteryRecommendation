@@ -1,8 +1,8 @@
 # main.py
-import tkinter as tk
 from src.gui import LottoApp
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = LottoApp(root)
-    root.mainloop()
+    # CustomTkinter는 root를 스스로 생성하므로 
+    # tk.Tk()를 만들어서 넘겨줄 필요가 없습니다.
+    app = LottoApp()
+    app.mainloop()
