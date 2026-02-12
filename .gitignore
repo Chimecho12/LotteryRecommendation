@@ -9,3 +9,6 @@ __pycache__/
 
 # ignore txt files
 *.txt
+
+# ignore keras files
+*.keras
