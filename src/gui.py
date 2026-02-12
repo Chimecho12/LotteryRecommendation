@@ -5,21 +5,17 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib import font_manager, rc
 import seaborn as sns
-import numpy as np  # 히트맵 데이터 처리를 위해 필요
+import numpy as np
 import threading
 import os
 import sys
 import platform
 
-# 로직 모듈 임포트
 from src.data_loader import DataLoader
 from src.predict_lotto import LottoAI
 
-# ==========================================
-# [중요] 한글 폰트 강제 설정 (Matplotlib 깨짐 방지)
-# ==========================================
+# 한글 폰트 설정
 if platform.system() == 'Windows':
-    # 윈도우: 맑은 고딕
     try:
         font_path = "c:/Windows/Fonts/malgun.ttf"
         font_name = font_manager.FontProperties(fname=font_path).get_name()
@@ -27,18 +23,13 @@ if platform.system() == 'Windows':
     except:
         rc('font', family='Malgun Gothic')
 elif platform.system() == 'Darwin':
-    # 맥: 애플고딕
     rc('font', family='AppleGothic')
 else:
-    # 리눅스: 나눔고딕 (설치 필요)
     rc('font', family='NanumGothic')
+plt.rcParams['axes.unicode_minus'] = False
 
-plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
-
-# 테마 설정
-ctk.set_appearance_mode("System")  # "Dark", "Light" or "System"
+ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
-
 
 class LottoApp(ctk.CTk):
     def __init__(self):
@@ -46,28 +37,23 @@ class LottoApp(ctk.CTk):
         self.title("AI Integrated Lotto Predictor")
         self.geometry("850x900")
         
-        # 로직 인스턴스 생성
         self.loader = DataLoader()
         self.ai = LottoAI()
-        
-        # X 버튼(창 닫기) 눌렀을 때 프로세스 강제 종료 연결
-        self.protocol("WM_DELETE_WINDOW", self.quit_program)
         
         self._init_ui()
 
     def _init_ui(self):
-        # 그리드 설정
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
-        # === 1. 헤더 영역 ===
+        # === 1. 헤더 ===
         self.header_frame = ctk.CTkFrame(self, corner_radius=10)
         self.header_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
         
         ctk.CTkLabel(self.header_frame, text="AI 복권 분석 & 예측 시스템", 
                      font=("Arial", 24, "bold")).pack(pady=10)
         
-        # [모드 선택]
+        # 모드 선택
         self.mode_var = ctk.StringVar(value="로또 6/45")
         self.combo_mode = ctk.CTkOptionMenu(
             self.header_frame, 
@@ -77,15 +63,11 @@ class LottoApp(ctk.CTk):
         )
         self.combo_mode.pack(padx=20, pady=(0, 5), fill="x")
 
-        # [파일 로드 버튼]
+        # 파일 로드 버튼
         self.btn_file = ctk.CTkButton(self.header_frame, text="📂 데이터 파일 열기 (Excel/CSV)", command=self.load_file)
-        self.btn_file.pack(padx=20, pady=(0, 5), fill="x")
+        self.btn_file.pack(padx=20, pady=(0, 10), fill="x")
 
-        # [프로그램 종료 버튼]
-        self.btn_exit = ctk.CTkButton(self.header_frame, text="❌ 프로그램 종료", 
-                                      command=self.quit_program,
-                                      fg_color="#C62828", hover_color="#B71C1C")
-        self.btn_exit.pack(padx=20, pady=(0, 10), fill="x")
+        # [삭제됨] 종료 버튼 제거
 
         self.lbl_status = ctk.CTkLabel(self.header_frame, text="파일 없음", text_color="gray")
         self.lbl_status.pack(pady=(0, 5))
@@ -101,12 +83,12 @@ class LottoApp(ctk.CTk):
         self.entry_count.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
         self.entry_count.insert(0, "5")
 
-        # 고정수 (로또 전용)
-        ctk.CTkLabel(self.setting_frame, text="고정수 (로또 전용, 쉼표 구분):").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        # 고정수
+        ctk.CTkLabel(self.setting_frame, text="고정수 (로또 전용):").grid(row=1, column=0, padx=10, pady=5, sticky="w")
         self.entry_fixed = ctk.CTkEntry(self.setting_frame, placeholder_text="예: 7, 15")
         self.entry_fixed.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
 
-        # === 3. 실행 버튼 영역 ===
+        # === 3. 실행 버튼 ===
         self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.btn_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
         self.btn_frame.grid_columnconfigure((0, 1), weight=1)
@@ -122,46 +104,32 @@ class LottoApp(ctk.CTk):
         # === 4. 로그 창 ===
         self.log_textbox = ctk.CTkTextbox(self, font=("Consolas", 14))
         self.log_textbox.grid(row=3, column=0, padx=20, pady=20, sticky="nsew")
-        self.log_textbox.insert("0.0", "시스템 준비 완료.\n원하는 복권 모드를 선택하고 파일을 로드하세요.\n")
+        self.log_textbox.insert("0.0", "시스템 준비 완료.\n")
         self.log_textbox.configure(state="disabled")
 
-    # ==========================================
-    # 기능 함수들
-    # ==========================================
     def log(self, msg):
         self.log_textbox.configure(state="normal")
         self.log_textbox.insert("end", msg + "\n")
         self.log_textbox.see("end")
         self.log_textbox.configure(state="disabled")
 
-    def quit_program(self):
-        """프로그램 완전 종료"""
-        self.destroy()
-        os._exit(0)
-
     def change_mode_ui(self, choice):
-        """모드 변경 시 UI 초기화"""
         self.log(f"🔄 모드 변경됨: {choice}")
         self.lbl_status.configure(text="파일을 다시 로드해주세요.", text_color="gray")
         self.btn_analyze.configure(state="disabled")
         self.btn_predict.configure(state="disabled")
 
     def load_file(self):
-        # CSV와 XLSX 모두 지원
         path = filedialog.askopenfilename(filetypes=[("Data Files", "*.xlsx *.csv")])
         if path:
             try:
-                # 현재 선택된 모드 확인
                 mode_str = self.mode_var.get()
                 mode_code = "lotto" if mode_str == "로또 6/45" else "pension"
-                
-                # 로더 호출
                 self.loader.load_file(path, mode=mode_code)
-                
-                self.lbl_status.configure(text=f"로드 완료: {os.path.basename(path)} ({mode_str})", text_color="#66BB6A")
+                self.lbl_status.configure(text=f"로드 완료: {os.path.basename(path)}", text_color="#66BB6A")
                 self.btn_analyze.configure(state="normal")
                 self.btn_predict.configure(state="normal")
-                self.log(f"[시스템] {mode_str} 데이터셋 로드 성공! ({len(self.loader.df)}개 레코드)")
+                self.log(f"[시스템] {mode_str} 데이터셋 로드 성공!")
             except Exception as e:
                 self.log(f"[에러] {e}")
 
@@ -174,13 +142,11 @@ class LottoApp(ctk.CTk):
             mode_str = self.mode_var.get()
             mode_code = "lotto" if mode_str == "로또 6/45" else "pension"
             
-            # 게임 수 파싱
             try:
                 game_count = int(self.entry_count.get())
                 if game_count < 1: game_count = 1
             except: game_count = 5
 
-            # 고정수 파싱 (로또만 해당)
             fixed_nums = []
             if mode_code == "lotto":
                 fixed_str = self.entry_fixed.get().strip()
@@ -192,31 +158,23 @@ class LottoApp(ctk.CTk):
                     except: pass
             
             self.log(f"\n>>> [{mode_str}] 학습 시작...")
-            self.log(f"    설정: {game_count}게임 / 고정수: {fixed_nums if fixed_nums else '없음'}")
-
-            # 전처리 및 학습
             data = self.loader.preprocess()
             if data is None: raise Exception("데이터 전처리 실패")
             
-            self.ai.train_model(data, mode=mode_code, epochs=50)
+            self.ai.train_model(data, mode=mode_code, epochs=100)
             self.log(">>> 모델 학습 완료! 번호 생성 중...")
 
-            # 예측
             last_data = data[-self.ai.window_size:]
-            
             results = []
             if mode_code == "lotto":
                 past_combos = self.loader.get_past_combinations()
                 results = self.ai.predict_lotto(last_data, past_combos, count=game_count, fixed_numbers=fixed_nums)
             else:
-                # 연금복권은 고정수 로직 미적용 (구조상 복잡함)
                 results = self.ai.predict_pension(last_data, count=game_count)
 
-            # 결과 출력
             self.log(f"\n====== {mode_str} AI 추천 ======")
             for i, res in enumerate(results):
                 if mode_code == "pension":
-                    # res = [조, 번호1, 번호2, ...]
                     self.log(f" GAME {i+1}:  [{res[0]}조]  {' '.join(map(str, res[1:]))}")
                 else:
                     self.log(f" GAME {i+1}:  {res}  (합: {sum(res)})")
@@ -229,9 +187,6 @@ class LottoApp(ctk.CTk):
         finally:
             self.btn_predict.configure(state="normal", text="🔮 AI 예측 시작")
 
-    # ==========================================
-    # 분석/시각화 관련 함수
-    # ==========================================
     def show_analysis(self):
         mode_str = self.mode_var.get()
         if mode_str == "연금복권 720+":
@@ -240,19 +195,15 @@ class LottoApp(ctk.CTk):
              self.show_lotto_analysis()
 
     def show_lotto_analysis(self):
-        """로또 6/45 전용 분석 리포트"""
         win = ctk.CTkToplevel(self)
         win.title("로또 6/45 분석 리포트")
         win.geometry("950x800")
-        
-        # 스크롤 가능한 프레임 (CTkTabView 대체)
         scroll_frame = ctk.CTkScrollableFrame(win)
         scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
         df = self.loader.df
-        plt.style.use('dark_background') # 다크모드 적용
+        plt.style.use('dark_background')
 
-        # 1. 번호 빈도
         self._add_report_section(scroll_frame, "1. 번호별 당첨 횟수 분포")
         fig1, ax1 = plt.subplots(figsize=(8, 4))
         all_nums = df[['번호1','번호2','번호3','번호4','번호5','번호6']].values.flatten()
@@ -260,30 +211,22 @@ class LottoApp(ctk.CTk):
         ax1.set_xlim(0, 46)
         self._embed_graph(fig1, scroll_frame)
 
-        # 2. 총합 분포
         self._add_report_section(scroll_frame, "2. 당첨 번호 합계(Sum) 분포")
         fig2, ax2 = plt.subplots(figsize=(8, 4))
         if '총합' in df.columns:
             sns.histplot(df['총합'], kde=True, ax=ax2, color='#FFCA28', bins=30)
-            avg = df['총합'].mean()
-            ax2.axvline(avg, color='red', linestyle='--', label=f'평균: {int(avg)}')
-            ax2.legend()
         self._embed_graph(fig2, scroll_frame)
 
-        # 3. 홀짝 & 고저
         self._add_report_section(scroll_frame, "3. 홀짝 / 고저 비율")
         fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(8, 4))
         if '홀짝비율' in df.columns:
             oe = df['홀짝비율'].value_counts().head(5)
             ax3a.pie(oe, labels=oe.index, autopct='%1.1f%%', colors=sns.color_palette("pastel"))
-            ax3a.set_title("홀:짝 비율")
         if '고저비율' in df.columns:
             hl = df['고저비율'].value_counts().head(5)
             ax3b.pie(hl, labels=hl.index, autopct='%1.1f%%', colors=sns.color_palette("Set2"))
-            ax3b.set_title("저:고 비율")
         self._embed_graph(fig3, scroll_frame)
 
-        # 4. AC값
         self._add_report_section(scroll_frame, "4. 복잡도(AC값) 분석")
         fig4, ax4 = plt.subplots(figsize=(8, 4))
         if 'AC값' in df.columns:
@@ -291,44 +234,35 @@ class LottoApp(ctk.CTk):
         self._embed_graph(fig4, scroll_frame)
 
     def show_pension_analysis(self):
-        """연금복권 720+ 전용 분석 리포트"""
         win = ctk.CTkToplevel(self)
         win.title("연금복권 720+ 분석 리포트")
         win.geometry("950x800")
-        
         scroll_frame = ctk.CTkScrollableFrame(win)
         scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
         df = self.loader.df
         plt.style.use('dark_background')
         
-        # 1. 조별 빈도
         self._add_report_section(scroll_frame, "1. 조(Group)별 1등 당첨 빈도")
         fig1, ax1 = plt.subplots(figsize=(8, 4))
         if '조' in df.columns:
             sns.countplot(x='조', data=df, ax=ax1, palette="viridis")
         self._embed_graph(fig1, scroll_frame)
         
-        # 2. 히트맵
         self._add_report_section(scroll_frame, "2. 각 자리별 숫자(0~9) 출현 빈도 Heatmap")
         fig2, ax2 = plt.subplots(figsize=(8, 6))
-        
         heatmap_data = np.zeros((6, 10))
         cols = ['번호1', '번호2', '번호3', '번호4', '번호5', '번호6']
         valid_cols = [c for c in cols if c in df.columns]
-        
         if valid_cols:
             for i, col in enumerate(valid_cols):
                 counts = df[col].value_counts().sort_index()
                 for num, count in counts.items():
-                    if 0 <= num <= 9:
-                        heatmap_data[i, int(num)] = count
-            
+                    if 0 <= num <= 9: heatmap_data[i, int(num)] = count
             sns.heatmap(heatmap_data, annot=True, fmt='g', cmap='magma', ax=ax2,
                         xticklabels=range(10), yticklabels=['1st','2nd','3rd','4th','5th','6th'])
         self._embed_graph(fig2, scroll_frame)
         
-        # 3. 합계 분포
         self._add_report_section(scroll_frame, "3. 숫자 6자리의 합 분포")
         fig3, ax3 = plt.subplots(figsize=(8, 4))
         if '숫자합' in df.columns:
@@ -336,17 +270,14 @@ class LottoApp(ctk.CTk):
         self._embed_graph(fig3, scroll_frame)
 
     def _add_report_section(self, parent, title_text):
-        """리포트 소제목 추가 헬퍼"""
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="x", pady=(20, 5))
         ctk.CTkLabel(frame, text=title_text, font=("Arial", 16, "bold"), 
                      text_color="#4DB6AC", anchor="w").pack(fill="x")
 
     def _embed_graph(self, fig, parent_widget):
-        """그래프 캔버스 임베딩 헬퍼"""
         fig.tight_layout()
-        fig.patch.set_facecolor('#2b2b2b') # 배경색을 다크 모드에 맞춤
-        
+        fig.patch.set_facecolor('#2b2b2b')
         canvas = FigureCanvasTkAgg(fig, master=parent_widget)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, pady=5)
