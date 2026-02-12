@@ -1,4 +1,4 @@
-# 연금복권 역대 당첨번호 표 정리 사이트 크롤링
+# 연금복권 역대 당첨번호 표 정리 사이트 크롤링 (걍 단순 실험)
 
 import requests
 from bs4 import BeautifulSoup
