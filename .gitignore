@@ -1,0 +1,11 @@
+#ignore all .json class files
+*.json
+
+# ignore python compiles
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ignore txt files
+*.txt
