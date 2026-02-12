@@ -210,14 +210,13 @@ class LottoApp(ctk.CTk):
                         fixed_nums = sorted(list(set(fixed_nums)))[:5]
                     except: pass
             
-            self.log(f"\n>>> [{mode_str}] 학습 시작...")
+            self.log(f"\n>>> [{mode_str}] 학습 및 분석 시작...")
             data = self.loader.preprocess()
             if data is None: raise Exception("전처리 실패")
             
-            # [중요] progress_cb에 GUI 업데이트 함수 전달
             self.ai.train_model(data, mode=mode_code, epochs=100, progress_cb=self.update_progress_gui)
             
-            self.log(">>> 번호 생성 및 필터링 중...")
+            self.log(">>> 최적의 번호 조합 탐색 중...")
             last_data = data[-self.ai.window_size:]
             
             results = []
@@ -227,15 +226,21 @@ class LottoApp(ctk.CTk):
             else:
                 results = self.ai.predict_pension(last_data, count=game_count, progress_cb=self.update_progress_gui)
 
-            self.log(f"\n====== {mode_str} AI 추천 ======")
-            for i, res in enumerate(results):
+            # [NEW] 결과 출력 (근거 포함)
+            self.log(f"\n====== {mode_str} AI 추천 결과 ======")
+            for i, (nums, reason) in enumerate(results):
                 if mode_code == "pension":
-                    self.log(f" GAME {i+1}:  [{res[0]}조]  {' '.join(map(str, res[1:]))}")
+                    # 연금복권 출력 포맷
+                    num_str = f"[{nums[0]}조] " + " ".join(map(str, nums[1:]))
+                    self.log(f" GAME {i+1}: {num_str}")
+                    self.log(f"   └─ 💡 {reason}")
                 else:
-                    self.log(f" GAME {i+1}:  {res}  (합: {sum(res)})")
-            self.log("================================")
+                    # 로또 출력 포맷
+                    self.log(f" GAME {i+1}: {nums} (합: {sum(nums)})")
+                    self.log(f"   └─ 💡 {reason}")
+                self.log("-" * 40) # 구분선
+            self.log("======================================")
             
-            # 완료 표시
             self.lbl_progress.configure(text="모든 작업 완료!")
             self.progressbar.set(1.0)
 
