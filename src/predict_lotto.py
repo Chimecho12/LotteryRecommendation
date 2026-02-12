@@ -1,9 +1,25 @@
-# src/ai_engine.py
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, load_model # load_model 추가
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input, Bidirectional
+import time
+import os
+
+class TrainingCallback(tf.keras.callbacks.Callback):
+    # (이전과 동일한 콜백 클래스)
+    def __init__(self, total_epochs, update_fn=None):
+        self.total_epochs = total_epochs
+        self.update_fn = update_fn
+        self.start_time = time.time()
+    def on_epoch_end(self, epoch, logs=None):
+        if self.update_fn:
+            current = epoch + 1
+            progress = current / self.total_epochs
+            elapsed = time.time() - self.start_time
+            avg_time = elapsed / current
+            eta = (self.total_epochs - current) * avg_time
+            self.update_fn(progress, f"딥러닝 학습 중... [{current}/{self.total_epochs}] (ETA: {int(eta)}s)")
 
 class LottoAI:
     def __init__(self):
@@ -13,19 +29,26 @@ class LottoAI:
         self.global_lotto_probs = None
         self.global_pension_probs = None
         self.pension_unique_dist = None
+        # 모델 저장 폴더 생성
+        if not os.path.exists("saved_models"):
+            os.makedirs("saved_models")
 
+    # ... (create_dataset 함수는 기존과 동일) ...
     def create_dataset(self, data):
         x, y = [], []
-        if len(data) <= self.window_size:
-            return np.array(x), np.array(y)
+        if len(data) <= self.window_size: return np.array(x), np.array(y)
         for i in range(len(data) - self.window_size):
             x.append(data[i : i + self.window_size])
             y.append(data[i + self.window_size])
         return np.array(x), np.array(y)
 
-    def train_model(self, data, mode="lotto", epochs=100, progress_cb=None):
+    def train_model(self, data, mode="lotto", epochs=100, progress_cb=None, file_path=None):
+        """
+        [수정] file_path: 원본 파일 경로 (캐시 검증용)
+        """
         self.mode = mode
         
+        # 1. 통계 계산 (항상 수행 - 빠르니까)
         if progress_cb: progress_cb(0.05, "데이터 통계 분석 중...")
         if mode == "lotto":
             self._calculate_global_lotto_probs(data)
@@ -33,14 +56,38 @@ class LottoAI:
             self._calculate_global_pension_probs(data)
             self._calculate_pension_unique_dist(data)
 
+        # 2. [핵심] 모델 캐시 확인
+        model_filename = f"saved_models/model_{mode}.keras"
+        should_retrain = True
+        
+        if file_path and os.path.exists(model_filename):
+            file_mtime = os.path.getmtime(file_path)
+            model_mtime = os.path.getmtime(model_filename)
+            
+            # 원본 파일보다 모델 파일이 더 최신이면 -> 로드
+            if model_mtime > file_mtime:
+                try:
+                    if progress_cb: progress_cb(0.1, "저장된 AI 모델 불러오는 중...")
+                    self.model = load_model(model_filename)
+                    print(f"[시스템] 캐시된 모델을 로드했습니다: {model_filename}")
+                    should_retrain = False
+                    time.sleep(0.5) # 사용자가 로딩 메시지를 볼 수 있게 찰나의 대기
+                except Exception as e:
+                    print(f"[오류] 모델 로드 실패, 재학습합니다: {e}")
+        
+        if not should_retrain:
+            return True
+
+        # 3. 모델 재학습 (캐시가 없거나 파일이 변경된 경우)
         X, y = self.create_dataset(data)
         if len(X) == 0:
             self.window_size = max(1, len(data) - 2)
             X, y = self.create_dataset(data)
             if len(X) == 0: return False
 
-        if progress_cb: progress_cb(0.1, "AI 모델 구조 설계 중...")
+        if progress_cb: progress_cb(0.1, "새로운 데이터로 AI 학습 시작...")
         
+        # 모델 구조 정의
         if mode == "lotto":
             inputs = Input(shape=(self.window_size, 45))
             x = Bidirectional(LSTM(128, return_sequences=True))(inputs)
@@ -60,11 +107,22 @@ class LottoAI:
             self.model = Model(inputs, outputs)
             self.model.compile(optimizer='adam', loss='mse')
 
-        # 학습 (진행률 콜백 생략 - 간소화)
-        self.model.fit(X, y, epochs=epochs, batch_size=16, verbose=0)
+        callbacks = []
+        if progress_cb:
+            callbacks.append(TrainingCallback(epochs, progress_cb))
+
+        self.model.fit(X, y, epochs=epochs, batch_size=16, verbose=0, callbacks=callbacks)
+        
+        # [핵심] 학습 완료 후 모델 저장
+        self.model.save(model_filename)
+        print(f"[시스템] 학습된 모델을 저장했습니다: {model_filename}")
+        
         return True
 
-    # ... (확률 계산 함수들 _calculate_... 기존과 동일) ...
+    # ... (나머지 _calculate_... 및 predict_... 함수들은 기존과 완벽히 동일하므로 생략하지 않고 유지) ...
+    # 편의를 위해 predict 함수만 아래에 다시 적지 않겠지만, 반드시 기존 코드를 유지해야 합니다.
+    # 아래는 기존 코드의 복사본입니다.
+
     def _calculate_global_lotto_probs(self, data):
         total_counts = np.sum(data, axis=0)
         self.global_lotto_probs = (total_counts + 1) / np.sum(total_counts + 1)
@@ -109,121 +167,85 @@ class LottoAI:
         if len(set(n % 10 for n in nums)) == 6: return False
         return True
 
-    # [NEW] 로또 추천 근거 생성 함수
     def _get_lotto_reason(self, nums, final_prob):
         reasons = []
-        
-        # 1. 합계 분석
         s = sum(nums)
         if 120 <= s <= 150: reasons.append("🔥황금 합계 구간")
         elif s < 120: reasons.append("📉낮은 수 위주")
         else: reasons.append("📈높은 수 위주")
-        
-        # 2. AI 트렌드 일치 여부 (상위 15개 추천수 중 몇 개 포함되었나)
-        top_indices = np.argsort(final_prob)[::-1][:15] # 상위 15개 인덱스
+        top_indices = np.argsort(final_prob)[::-1][:15]
         ai_match_count = sum(1 for n in nums if (n-1) in top_indices)
         if ai_match_count >= 3: reasons.append(f"🤖AI 강력추천수 {ai_match_count}개 포함")
-        
-        # 3. 홀짝
         odd = sum(1 for n in nums if n % 2 == 1)
         if odd == 3: reasons.append("⚖️완벽한 홀짝 밸런스")
-        
         return ", ".join(reasons)
 
     def predict_lotto(self, last_data, past_combinations, count=5, fixed_numbers=None, progress_cb=None):
         if self.model is None: raise Exception("모델 없음")
         if fixed_numbers is None: fixed_numbers = []
-        
         if progress_cb: progress_cb(0.9, "번호 조합 생성 중...")
-        
         lstm_pred = self.model.predict(last_data.reshape(1, self.window_size, 45), verbose=0)[0]
         global_prob = self.global_lotto_probs
         final_prob = (lstm_pred * 0.7) + (global_prob * 0.3)
-        
         for n in fixed_numbers: final_prob[n-1] = 0
         final_prob /= np.sum(final_prob)
-        
-        results = [] # (번호리스트, 이유) 튜플 저장
+        results = []
         attempts = 0
         while len(results) < count:
             attempts += 1
             if progress_cb and attempts % 100 == 0:
                 current_percent = 0.9 + (0.1 * (len(results) / count))
                 progress_cb(current_percent, f"필터링 중... ({len(results)}/{count})")
-
             needed = 6 - len(fixed_numbers)
-            
-            # 안전장치
             if attempts > 5000:
                 picks = np.random.choice(range(1, 46), size=needed, replace=False, p=final_prob)
                 final = sorted(fixed_numbers + list(picks))
                 if tuple(final) not in past_combinations:
-                    reason = "⚠️필터 조건 완화 (확률 기반 추출)"
+                    reason = "⚠️필터 조건 완화"
                     results.append((final, reason))
                 continue
-
             picks = np.random.choice(range(1, 46), size=needed, replace=False, p=final_prob)
             final = sorted(fixed_numbers + list(picks))
-            
             if tuple(final) in past_combinations: continue
             if tuple(final) in [tuple(r[0]) for r in results]: continue
             if not self._check_lotto_conditions(final): continue
-            
-            # [NEW] 이유 생성
             reason = self._get_lotto_reason(final, final_prob)
             results.append((final, reason))
-            
         if progress_cb: progress_cb(1.0, "완료!")
         return results
 
-    # [NEW] 연금복권 추천 근거 생성 함수
     def _get_pension_reason(self, row, target_unique_count, ai_trend):
         reasons = []
-        
-        # 1. 조 분석
         jo = row[0]
         predicted_jo = (ai_trend[0] * 5.0)
         if abs(jo - predicted_jo) < 1.0: reasons.append("🎯AI 예측 조 적중")
-        
-        # 2. 중복 패턴
         if target_unique_count == 6: reasons.append("🌈모두 다른 숫자")
         elif target_unique_count == 5: reasons.append("🔄1쌍 중복 패턴(42%확률)")
         elif target_unique_count == 4: reasons.append("🔄2쌍 중복 패턴(33%확률)")
-        
-        # 3. 숫자 트렌드
         nums = row[1:]
         high_nums = sum(1 for n in nums if n >= 5)
         if high_nums >= 4: reasons.append("📈높은 수 위주")
         elif high_nums <= 2: reasons.append("📉낮은 수 위주")
-        
         return ", ".join(reasons)
 
     def predict_pension(self, last_data, count=5, progress_cb=None):
         if self.model is None or self.pension_unique_dist is None: 
             raise Exception("모델 준비 안됨")
-            
         if progress_cb: progress_cb(0.9, "연금복권 번호 조합 중...")
-        
         ai_trend = self.model.predict(last_data.reshape(1, self.window_size, 7), verbose=0)[0]
         results = []
         target_keys = list(self.pension_unique_dist.keys())
         target_probs = list(self.pension_unique_dist.values())
-        
         for idx in range(count):
             if progress_cb:
                 progress_cb(0.9 + (0.1 * ((idx + 1) / count)), f"번호 생성 중... ({idx+1}/{count})")
-
             target_unique_count = np.random.choice(target_keys, p=target_probs)
             row = []
-            
-            # 조 예측
             jo_probs = self.global_pension_probs[0][1:]
             ai_jo_weight = np.exp(-0.5 * (np.arange(1, 6) - (ai_trend[0]*5.0))**2)
             final_jo_prob = jo_probs * ai_jo_weight
             final_jo_prob /= np.sum(final_jo_prob)
             row.append(np.random.choice(range(1, 6), p=final_jo_prob))
-            
-            # 숫자 예측
             best_nums = []
             for _ in range(200):
                 temp_nums = []
@@ -234,17 +256,12 @@ class LottoAI:
                     combined_prob = hist_probs * ai_weight
                     combined_prob /= np.sum(combined_prob)
                     temp_nums.append(np.random.choice(range(10), p=combined_prob))
-                
                 if len(set(temp_nums)) == target_unique_count:
                     best_nums = temp_nums
                     break
-            
             if not best_nums: best_nums = temp_nums
             row.extend(best_nums)
-            
-            # [NEW] 이유 생성
             reason = self._get_pension_reason(row, target_unique_count, ai_trend)
             results.append((row, reason))
-            
         if progress_cb: progress_cb(1.0, "완료!")
         return results
