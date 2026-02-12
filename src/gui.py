@@ -11,10 +11,13 @@ import os
 import sys
 import platform
 
+# 로직 모듈
 from src.data_loader import DataLoader
 from src.predict_lotto import LottoAI
 
-# 한글 폰트 설정
+# ==========================================
+# 폰트 설정 (한글 깨짐 방지)
+# ==========================================
 if platform.system() == 'Windows':
     try:
         font_path = "c:/Windows/Fonts/malgun.ttf"
@@ -26,10 +29,11 @@ elif platform.system() == 'Darwin':
     rc('font', family='AppleGothic')
 else:
     rc('font', family='NanumGothic')
-plt.rcParams['axes.unicode_minus'] = False
 
+plt.rcParams['axes.unicode_minus'] = False
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
+
 
 class LottoApp(ctk.CTk):
     def __init__(self):
@@ -40,20 +44,23 @@ class LottoApp(ctk.CTk):
         self.loader = DataLoader()
         self.ai = LottoAI()
         
+        # X 버튼 클릭 시 종료 이벤트 연결
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self._init_ui()
 
     def _init_ui(self):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
-        # === 1. 헤더 ===
+        # === 1. 헤더 영역 ===
         self.header_frame = ctk.CTkFrame(self, corner_radius=10)
         self.header_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
         
         ctk.CTkLabel(self.header_frame, text="AI 복권 분석 & 예측 시스템", 
                      font=("Arial", 24, "bold")).pack(pady=10)
         
-        # 모드 선택
+        # [모드 선택]
         self.mode_var = ctk.StringVar(value="로또 6/45")
         self.combo_mode = ctk.CTkOptionMenu(
             self.header_frame, 
@@ -63,11 +70,9 @@ class LottoApp(ctk.CTk):
         )
         self.combo_mode.pack(padx=20, pady=(0, 5), fill="x")
 
-        # 파일 로드 버튼
+        # [파일 로드 버튼]
         self.btn_file = ctk.CTkButton(self.header_frame, text="📂 데이터 파일 열기 (Excel/CSV)", command=self.load_file)
         self.btn_file.pack(padx=20, pady=(0, 10), fill="x")
-
-        # [삭제됨] 종료 버튼 제거
 
         self.lbl_status = ctk.CTkLabel(self.header_frame, text="파일 없음", text_color="gray")
         self.lbl_status.pack(pady=(0, 5))
@@ -113,25 +118,68 @@ class LottoApp(ctk.CTk):
         self.log_textbox.see("end")
         self.log_textbox.configure(state="disabled")
 
+    def on_closing(self):
+        """프로그램 완전 종료"""
+        self.destroy()
+        os._exit(0)
+
     def change_mode_ui(self, choice):
         self.log(f"🔄 모드 변경됨: {choice}")
         self.lbl_status.configure(text="파일을 다시 로드해주세요.", text_color="gray")
+        # 모드 변경 시 기존 데이터와의 충돌 방지를 위해 버튼 비활성화
         self.btn_analyze.configure(state="disabled")
         self.btn_predict.configure(state="disabled")
+        self.loader.df = None # 데이터 초기화
 
     def load_file(self):
+        """파일을 로드하고 현재 모드에 맞는지 즉시 검사합니다."""
         path = filedialog.askopenfilename(filetypes=[("Data Files", "*.xlsx *.csv")])
-        if path:
-            try:
-                mode_str = self.mode_var.get()
-                mode_code = "lotto" if mode_str == "로또 6/45" else "pension"
-                self.loader.load_file(path, mode=mode_code)
-                self.lbl_status.configure(text=f"로드 완료: {os.path.basename(path)}", text_color="#66BB6A")
-                self.btn_analyze.configure(state="normal")
-                self.btn_predict.configure(state="normal")
-                self.log(f"[시스템] {mode_str} 데이터셋 로드 성공!")
-            except Exception as e:
-                self.log(f"[에러] {e}")
+        if not path:
+            return
+
+        try:
+            # 1. 현재 모드 확인
+            mode_str = self.mode_var.get()
+            mode_code = "lotto" if mode_str == "로또 6/45" else "pension"
+            
+            # 2. 파일 로드 시도
+            self.loader.load_file(path, mode=mode_code)
+            
+            # 3. [핵심] 컬럼 검사 (Validation)
+            df = self.loader.df
+            if df is None:
+                raise Exception("파일을 읽을 수 없습니다.")
+
+            if mode_code == "lotto":
+                # 로또 필수 컬럼 확인
+                required = ['번호1', '번호2', '번호3', '번호4', '번호5', '번호6']
+                if not all(col in df.columns for col in required):
+                    raise ValueError(f"선택한 모드는 [{mode_str}]인데,\n파일 형식이 맞지 않습니다.\n(연금복권 파일인가요?)")
+            else:
+                # 연금복권 필수 컬럼 확인
+                required = ['조', '번호1', '번호2', '번호3', '번호4', '번호5', '번호6']
+                if not all(col in df.columns for col in required):
+                    raise ValueError(f"선택한 모드는 [{mode_str}]인데,\n파일 형식이 맞지 않습니다.\n(로또 파일인가요?)")
+
+            # 4. 검사 통과 시 버튼 활성화
+            self.lbl_status.configure(text=f"로드 완료: {os.path.basename(path)}", text_color="#66BB6A")
+            self.btn_analyze.configure(state="normal")
+            self.btn_predict.configure(state="normal")
+            self.log(f"[시스템] {mode_str} 데이터 로드 성공! ({len(df)}행)")
+
+        except ValueError as ve:
+            # 데이터 형식이 안 맞을 때 (경고창 + 버튼 비활성화)
+            messagebox.showerror("데이터 불일치", str(ve))
+            self.lbl_status.configure(text="파일 형식 불일치", text_color="#FF5252")
+            self.btn_analyze.configure(state="disabled")
+            self.btn_predict.configure(state="disabled")
+            self.loader.df = None # 잘못된 데이터 비우기
+            self.log(f"[경고] {ve}")
+            
+        except Exception as e:
+            # 기타 에러
+            self.log(f"[에러] {e}")
+            messagebox.showerror("오류", f"파일 로드 중 오류가 발생했습니다.\n{e}")
 
     def start_thread(self):
         self.btn_predict.configure(state="disabled", text="학습 중...")
@@ -142,6 +190,10 @@ class LottoApp(ctk.CTk):
             mode_str = self.mode_var.get()
             mode_code = "lotto" if mode_str == "로또 6/45" else "pension"
             
+            # (이중 안전장치) 데이터 확인
+            if self.loader.df is None:
+                raise Exception("데이터가 로드되지 않았습니다.")
+
             try:
                 game_count = int(self.entry_count.get())
                 if game_count < 1: game_count = 1
@@ -188,6 +240,7 @@ class LottoApp(ctk.CTk):
             self.btn_predict.configure(state="normal", text="🔮 AI 예측 시작")
 
     def show_analysis(self):
+        # 버튼이 활성화되어 있다면 이미 load_file에서 검증된 상태임
         mode_str = self.mode_var.get()
         if mode_str == "연금복권 720+":
              self.show_pension_analysis()
@@ -195,13 +248,13 @@ class LottoApp(ctk.CTk):
              self.show_lotto_analysis()
 
     def show_lotto_analysis(self):
+        df = self.loader.df
         win = ctk.CTkToplevel(self)
         win.title("로또 6/45 분석 리포트")
         win.geometry("950x800")
         scroll_frame = ctk.CTkScrollableFrame(win)
         scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        df = self.loader.df
         plt.style.use('dark_background')
 
         self._add_report_section(scroll_frame, "1. 번호별 당첨 횟수 분포")
@@ -234,13 +287,13 @@ class LottoApp(ctk.CTk):
         self._embed_graph(fig4, scroll_frame)
 
     def show_pension_analysis(self):
+        df = self.loader.df
         win = ctk.CTkToplevel(self)
         win.title("연금복권 720+ 분석 리포트")
         win.geometry("950x800")
         scroll_frame = ctk.CTkScrollableFrame(win)
         scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        df = self.loader.df
         plt.style.use('dark_background')
         
         self._add_report_section(scroll_frame, "1. 조(Group)별 1등 당첨 빈도")
