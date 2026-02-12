@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
-import pickle # [NEW] 객체 저장용 모듈
+import pickle
 
 class DataLoader:
     def __init__(self):
@@ -19,11 +19,10 @@ class DataLoader:
         self.mode = mode
         self.file_path = file_path
         
-        # [핵심] 캐시 파일 경로 생성 (예: data.xlsx -> data.xlsx.pkl)
+        # 캐시 파일 경로 생성 (예: data.xlsx -> data.xlsx.pkl)
         cache_path = file_path + f".{mode}.pkl"
         
         # 1. 캐시 유효성 검사
-        # 캐시 파일이 존재하고, 원본 파일보다 나중에 생성(수정)되었다면? -> 캐시 로드
         if os.path.exists(cache_path):
             file_mtime = os.path.getmtime(file_path)
             cache_mtime = os.path.getmtime(cache_path)
@@ -36,7 +35,7 @@ class DataLoader:
                     self.cols = cached_data['cols']
                     return self.df
 
-        # 2. (캐시가 없거나 낡았으면) 새로 분석
+        # 2. 신규 분석 (캐시가 없거나 수정된 흔적이 있는 경우) 
         print("[시스템] 데이터를 새로 분석합니다...")
         ext = os.path.splitext(file_path)[-1].lower()
 
@@ -51,7 +50,7 @@ class DataLoader:
         except Exception as e:
             raise Exception(f"파일 읽기 오류: {e}")
 
-        # 모드별 처리 (기존 로직 동일)
+        # 모드별 처리 (로또 / 연금복권)
         if self.mode == "lotto":
             self.cols = ['번호1', '번호2', '번호3', '번호4', '번호5', '번호6']
             self._normalize_columns()
@@ -79,14 +78,13 @@ class DataLoader:
 
             self._analyze_pension_features()
             
-        # [핵심] 분석 완료된 데이터 캐시 저장
+        # 분석 완료된 데이터 캐시 저장
         with open(cache_path, 'wb') as f:
             pickle.dump({'df': self.df, 'cols': self.cols}, f)
         print("[시스템] 분석 결과가 캐시로 저장되었습니다.")
             
         return self.df
-
-    # ... (나머지 헬퍼 함수들은 기존 코드와 동일하게 유지) ...
+    
     def _read_csv_auto_header(self, path, encoding='utf-8'):
         preview = pd.read_csv(path, encoding=encoding, nrows=5, header=None)
         header_idx = 0

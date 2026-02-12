@@ -7,7 +7,6 @@ import time
 import os
 
 class TrainingCallback(tf.keras.callbacks.Callback):
-    # (이전과 동일한 콜백 클래스)
     def __init__(self, total_epochs, update_fn=None):
         self.total_epochs = total_epochs
         self.update_fn = update_fn
@@ -33,7 +32,6 @@ class LottoAI:
         if not os.path.exists("saved_models"):
             os.makedirs("saved_models")
 
-    # ... (create_dataset 함수는 기존과 동일) ...
     def create_dataset(self, data):
         x, y = [], []
         if len(data) <= self.window_size: return np.array(x), np.array(y)
@@ -48,7 +46,7 @@ class LottoAI:
         """
         self.mode = mode
         
-        # 1. 통계 계산 (항상 수행 - 빠르니까)
+        # 1. 통계 계산
         if progress_cb: progress_cb(0.05, "데이터 통계 분석 중...")
         if mode == "lotto":
             self._calculate_global_lotto_probs(data)
@@ -56,7 +54,7 @@ class LottoAI:
             self._calculate_global_pension_probs(data)
             self._calculate_pension_unique_dist(data)
 
-        # 2. [핵심] 모델 캐시 확인
+        # 2. 모델 캐시 확인
         model_filename = f"saved_models/model_{mode}.keras"
         should_retrain = True
         
@@ -64,14 +62,14 @@ class LottoAI:
             file_mtime = os.path.getmtime(file_path)
             model_mtime = os.path.getmtime(model_filename)
             
-            # 원본 파일보다 모델 파일이 더 최신이면 -> 로드
+            # 원본 파일보다 모델 파일이 더 최신인 경우 로드
             if model_mtime > file_mtime:
                 try:
-                    if progress_cb: progress_cb(0.1, "저장된 AI 모델 불러오는 중...")
+                    if progress_cb: progress_cb(0.1, "저장된 분석 모델 불러오는 중...")
                     self.model = load_model(model_filename)
                     print(f"[시스템] 캐시된 모델을 로드했습니다: {model_filename}")
                     should_retrain = False
-                    time.sleep(0.5) # 사용자가 로딩 메시지를 볼 수 있게 찰나의 대기
+                    time.sleep(0.5) # 사용자가 로딩 메시지를 볼 수 있게 잠깐 대기
                 except Exception as e:
                     print(f"[오류] 모델 로드 실패, 재학습합니다: {e}")
         
@@ -85,7 +83,7 @@ class LottoAI:
             X, y = self.create_dataset(data)
             if len(X) == 0: return False
 
-        if progress_cb: progress_cb(0.1, "새로운 데이터로 AI 학습 시작...")
+        if progress_cb: progress_cb(0.1, "새로운 데이터로 학습 시작...")
         
         # 모델 구조 정의
         if mode == "lotto":
@@ -113,15 +111,11 @@ class LottoAI:
 
         self.model.fit(X, y, epochs=epochs, batch_size=16, verbose=0, callbacks=callbacks)
         
-        # [핵심] 학습 완료 후 모델 저장
+        # 학습 완료 후 모델 저장
         self.model.save(model_filename)
         print(f"[시스템] 학습된 모델을 저장했습니다: {model_filename}")
         
         return True
-
-    # ... (나머지 _calculate_... 및 predict_... 함수들은 기존과 완벽히 동일하므로 생략하지 않고 유지) ...
-    # 편의를 위해 predict 함수만 아래에 다시 적지 않겠지만, 반드시 기존 코드를 유지해야 합니다.
-    # 아래는 기존 코드의 복사본입니다.
 
     def _calculate_global_lotto_probs(self, data):
         total_counts = np.sum(data, axis=0)
@@ -170,14 +164,14 @@ class LottoAI:
     def _get_lotto_reason(self, nums, final_prob):
         reasons = []
         s = sum(nums)
-        if 120 <= s <= 150: reasons.append("🔥황금 합계 구간")
-        elif s < 120: reasons.append("📉낮은 수 위주")
-        else: reasons.append("📈높은 수 위주")
+        if 120 <= s <= 150: reasons.append("[빈도가 높은 합계 구간]")
+        elif s < 120: reasons.append("[낮은 수 위주]")
+        else: reasons.append("[높은 수 위주]")
         top_indices = np.argsort(final_prob)[::-1][:15]
         ai_match_count = sum(1 for n in nums if (n-1) in top_indices)
-        if ai_match_count >= 3: reasons.append(f"🤖AI 강력추천수 {ai_match_count}개 포함")
+        if ai_match_count >= 3: reasons.append(f"[분석에 적합한 추천] {ai_match_count}개 포함")
         odd = sum(1 for n in nums if n % 2 == 1)
-        if odd == 3: reasons.append("⚖️완벽한 홀짝 밸런스")
+        if odd == 3: reasons.append("[홀짝 밸런스]")
         return ", ".join(reasons)
 
     def predict_lotto(self, last_data, past_combinations, count=5, fixed_numbers=None, progress_cb=None):
@@ -218,14 +212,14 @@ class LottoAI:
         reasons = []
         jo = row[0]
         predicted_jo = (ai_trend[0] * 5.0)
-        if abs(jo - predicted_jo) < 1.0: reasons.append("🎯AI 예측 조 적중")
-        if target_unique_count == 6: reasons.append("🌈모두 다른 숫자")
-        elif target_unique_count == 5: reasons.append("🔄1쌍 중복 패턴(42%확률)")
-        elif target_unique_count == 4: reasons.append("🔄2쌍 중복 패턴(33%확률)")
+        if abs(jo - predicted_jo) < 1.0: reasons.append("[예측 조]")
+        if target_unique_count == 6: reasons.append("[모두 다른 숫자]")
+        elif target_unique_count == 5: reasons.append("[1쌍 중복 패턴(42%확률)]")
+        elif target_unique_count == 4: reasons.append("[2쌍 중복 패턴(33%확률)]")
         nums = row[1:]
         high_nums = sum(1 for n in nums if n >= 5)
-        if high_nums >= 4: reasons.append("📈높은 수 위주")
-        elif high_nums <= 2: reasons.append("📉낮은 수 위주")
+        if high_nums >= 4: reasons.append("[높은 수 위주]")
+        elif high_nums <= 2: reasons.append("[낮은 수 위주]")
         return ", ".join(reasons)
 
     def predict_pension(self, last_data, count=5, progress_cb=None):

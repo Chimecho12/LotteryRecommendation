@@ -14,9 +14,7 @@ import time
 from src.data_loader import DataLoader
 from src.predict_lotto import LottoAI
 
-# ==========================================
 # 폰트 및 테마 설정
-# ==========================================
 if platform.system() == 'Windows':
     try:
         font_path = "c:/Windows/Fonts/malgun.ttf"
@@ -33,9 +31,7 @@ plt.rcParams['axes.unicode_minus'] = False
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-# ==========================================
 # 색상 유틸리티 함수
-# ==========================================
 def get_lotto_color(num):
     """로또 번호별 공 색상 반환"""
     try:
@@ -65,11 +61,11 @@ class LottoApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
-        # === 1. 헤더 ===
+        # 1. 헤더
         self.header_frame = ctk.CTkFrame(self, corner_radius=10)
         self.header_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
         
-        ctk.CTkLabel(self.header_frame, text="AI 복권 분석 & 예측 시스템", 
+        ctk.CTkLabel(self.header_frame, text="복권 분석 & 예측 프로그램", 
                      font=("Arial", 24, "bold")).pack(pady=10)
         
         # 컨트롤 패널
@@ -89,7 +85,7 @@ class LottoApp(ctk.CTk):
         self.lbl_status = ctk.CTkLabel(self.ctrl_frame, text="파일 없음", text_color="gray")
         self.lbl_status.pack(side="left", padx=10)
 
-        # === 2. 설정 및 실행 ===
+        # 2. 설정 및 실행
         self.setting_frame = ctk.CTkFrame(self)
         self.setting_frame.grid(row=1, column=0, padx=20, pady=5, sticky="ew")
         
@@ -102,13 +98,13 @@ class LottoApp(ctk.CTk):
         self.entry_fixed = ctk.CTkEntry(self.setting_frame, width=100, placeholder_text="예: 1, 5")
         self.entry_fixed.pack(side="left")
 
-        self.btn_predict = ctk.CTkButton(self.setting_frame, text="🔮 예측 시작", command=self.start_thread, fg_color="#3949AB")
+        self.btn_predict = ctk.CTkButton(self.setting_frame, text="예측 시작", command=self.start_thread, fg_color="#3949AB")
         self.btn_predict.pack(side="right", padx=10, pady=10)
 
         self.btn_analyze = ctk.CTkButton(self.setting_frame, text="📊 분석 리포트", command=self.show_analysis, state="disabled", fg_color="#00897B")
         self.btn_analyze.pack(side="right", padx=5, pady=10)
 
-        # === 3. 진행바 ===
+        # 3. 진행바
         self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.progress_frame.grid(row=2, column=0, padx=20, pady=0, sticky="ew")
         self.lbl_progress = ctk.CTkLabel(self.progress_frame, text="준비 완료", text_color="#1E88E5", anchor="w")
@@ -117,7 +113,7 @@ class LottoApp(ctk.CTk):
         self.progressbar.pack(fill="x", pady=(0, 10))
         self.progressbar.set(0)
 
-        # === 4. 결과 비주얼 뷰어 ===
+        # 4. 결과 비주얼 뷰어
         self.result_view = ctk.CTkScrollableFrame(self, corner_radius=10, fg_color="transparent")
         self.result_view.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
         
@@ -130,9 +126,7 @@ class LottoApp(ctk.CTk):
         self.log_textbox.grid(row=4, column=0, padx=20, pady=(0, 20), sticky="ew")
         self.log_textbox.insert("0.0", "시스템 로그...\n")
 
-    # ==========================================
     # 시각화 로직
-    # ==========================================
     def clear_results(self):
         for widget in self.result_view.winfo_children():
             widget.destroy()
@@ -181,9 +175,7 @@ class LottoApp(ctk.CTk):
                     ball = self.create_ball(ball_frame, num, "#E65100") 
                     ball.pack(side="left", padx=3)
 
-    # ==========================================
     # 기본 기능 함수들
-    # ==========================================
     def log(self, msg):
         self.log_textbox.insert("end", msg + "\n")
         self.log_textbox.see("end")
@@ -193,7 +185,7 @@ class LottoApp(ctk.CTk):
         os._exit(0)
 
     def change_mode_ui(self, choice):
-        self.log(f"🔄 모드 변경됨: {choice}")
+        self.log(f"모드 변경됨: {choice}")
         self.lbl_status.configure(text="파일을 다시 로드해주세요.", text_color="gray")
         self.btn_analyze.configure(state="disabled")
         self.btn_predict.configure(state="disabled")
@@ -235,7 +227,7 @@ class LottoApp(ctk.CTk):
 
     def start_thread(self):
         self.btn_predict.configure(state="disabled", text="학습 중...")
-        self.lbl_progress.configure(text="AI 엔진 가동 중...")
+        self.lbl_progress.configure(text="분석 엔진 가동 중...")
         self.progressbar.set(0)
         self.clear_results()
         threading.Thread(target=self.run_ai).start()
@@ -269,7 +261,7 @@ class LottoApp(ctk.CTk):
             self.log(f"\n>>> [{mode_str}] 학습 시작...")
             data = self.loader.preprocess()
             
-            # [중요] file_path 전달
+            # file_path 전달
             current_file_path = self.loader.file_path 
 
             self.ai.train_model(
@@ -298,7 +290,7 @@ class LottoApp(ctk.CTk):
             self.log(f"[오류] {e}")
             messagebox.showerror("오류", str(e))
         finally:
-            self.btn_predict.configure(state="normal", text="🔮 예측 시작")
+            self.btn_predict.configure(state="normal", text="예측 시작")
 
     def show_analysis(self):
         if self.loader.df is None: return
